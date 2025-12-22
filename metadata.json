@@ -1,0 +1,5 @@
+{
+  "name": "TAI DesignSync 视觉走查工具",
+  "description": "设计师视觉还原走查工具。对比设计稿与开发实现，使用 Gemini AI 自动检测差异，并生成 Markdown 报告方便提交给研发。",
+  "requestFramePermissions": []
+}

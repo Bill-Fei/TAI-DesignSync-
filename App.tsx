@@ -1342,6 +1342,17 @@ const App: React.FC = () => {
                                          // Filter: only show annotation if it belongs to current active dev image
                                          if (ann.devImageId !== activeDev.id) return null;
 
+                                         // Find index in issues list for numbering
+                                         const issueIdx = p.issues.findIndex(i => i.annotationId === ann.id);
+                                         const displayNum = issueIdx !== -1 ? issueIdx + 1 : null;
+
+                                         // Badge Component
+                                         const badge = displayNum ? (
+                                             <div className="absolute -top-3 -left-3 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center text-xs font-bold border-2 border-white shadow-md z-50 leading-none">
+                                                 {displayNum}
+                                             </div>
+                                         ) : null;
+
                                          if (ann.type === 'ai' || (ann.type === 'manual' && ann.width)) {
                                             return (
                                                 <div 
@@ -1353,7 +1364,9 @@ const App: React.FC = () => {
                                                         width: `${ann.width}%`, 
                                                         height: `${ann.height}%` 
                                                     }}
-                                                />
+                                                >
+                                                    {badge}
+                                                </div>
                                             );
                                          }
                                          
@@ -1374,8 +1387,14 @@ const App: React.FC = () => {
                                                         transform: `rotate(${angle}deg)` 
                                                     }}
                                                 >
-                                                     <div className="bg-white border border-gray-200 px-1 rounded text-[8px] font-bold shadow-sm" style={{ transform: `rotate(${-angle}deg)` }}>
+                                                     <div className="bg-white border border-gray-200 px-1 rounded text-[8px] font-bold shadow-sm relative" style={{ transform: `rotate(${-angle}deg)` }}>
                                                         {Math.round(lenPct)}%
+                                                        {/* Center badge on label */}
+                                                        {displayNum && (
+                                                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center text-xs font-bold border-2 border-white shadow-md z-50 leading-none">
+                                                                {displayNum}
+                                                            </div>
+                                                        )}
                                                      </div>
                                                 </div>
                                             );
@@ -1390,6 +1409,7 @@ const App: React.FC = () => {
                                                 >
                                                     <div className="w-3 h-3 rounded-full border border-gray-100" style={{ backgroundColor: ann.color }} />
                                                     <span className="text-[10px] font-mono text-gray-800">{ann.color}</span>
+                                                    {badge}
                                                 </div>
                                             );
                                          }
@@ -1402,6 +1422,7 @@ const App: React.FC = () => {
                                                     style={{ left: `${ann.x}%`, top: `${ann.y}%` }}
                                                 >
                                                     <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                                    {badge}
                                                 </div>
                                             );
                                          }
@@ -1417,14 +1438,19 @@ const App: React.FC = () => {
                             {p.issues.length === 0 ? (
                                 <div className="p-8 text-center text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">无问题记录</div>
                             ) : (
-                                p.issues.map(issue => {
+                                p.issues.map((issue, issueIdx) => {
                                     const statusConfig = statusMap[issue.status];
                                     return (
                                         <div key={issue.id} className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
                                             <div className="flex justify-between items-start mb-2">
-                                                <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${issue.severity === 'critical' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                                    {issue.severity === 'critical' ? '紧急' : '普通'}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="bg-gray-900 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">
+                                                        {issueIdx + 1}
+                                                    </span>
+                                                    <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${issue.severity === 'critical' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                        {issue.severity === 'critical' ? '紧急' : '普通'}
+                                                    </span>
+                                                </div>
                                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${statusConfig.color}`}>
                                                     {React.createElement(statusConfig.icon, { size: 10 })}
                                                     {statusConfig.label}

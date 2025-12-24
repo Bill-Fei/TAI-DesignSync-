@@ -47,6 +47,7 @@ export interface Project {
   activeDevImageId: string | null; // 当前正在查看的实现图ID
   issues: Issue[];
   annotations: Annotation[];
+  figmaUrl?: string; // Figma 链接
 }
 
 export enum TabMode {

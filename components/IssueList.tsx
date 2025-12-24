@@ -14,7 +14,6 @@ interface IssueListProps {
   aiProgress?: number;
   onAnalyze: () => void;
   onHoverIssue?: (id: string | null) => void;
-  isDevMode?: boolean;
 }
 
 const severityMap: Record<string, { label: string; color: string }> = {
@@ -41,8 +40,7 @@ const IssueList: React.FC<IssueListProps> = ({
   isAnalyzing,
   aiProgress = 0,
   onAnalyze,
-  onHoverIssue,
-  isDevMode = false
+  onHoverIssue
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [newCommentText, setNewCommentText] = useState('');
@@ -79,8 +77,8 @@ const IssueList: React.FC<IssueListProps> = ({
     if (!issue) return;
     const newComment: Comment = {
       id: Date.now().toString(),
-      author: isDevMode ? '研发' : '设计',
-      role: isDevMode ? 'developer' : 'designer',
+      author: '设计',
+      role: 'designer',
       content: newCommentText.trim(),
       timestamp: Date.now()
     };
@@ -108,9 +106,12 @@ const IssueList: React.FC<IssueListProps> = ({
   }
 
   return (
-    <div className="flex flex-col h-full bg-white border-l border-gray-200 w-[30%] min-w-[360px] max-w-[500px] shadow-xl shrink-0">
+    <div 
+      id="issue-list-container" 
+      className="flex flex-col h-full bg-white border-l border-gray-200 w-[30%] min-w-[360px] max-w-[500px] shadow-xl shrink-0"
+    >
       {/* Header */}
-      <div className={`p-5 border-b border-gray-200 ${isDevMode ? 'bg-slate-800 text-white' : 'bg-white'}`}>
+      <div className="p-5 border-b border-gray-200 bg-white">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <ClipboardList className="text-indigo-600" size={20} />
@@ -143,44 +144,45 @@ const IssueList: React.FC<IssueListProps> = ({
           })}
         </div>
         
-        {!isDevMode && (
-          <div className="space-y-3">
-            <button
-              onClick={onAnalyze}
-              disabled={isAnalyzing}
-              className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold transition-all ${
-                isAnalyzing ? 'bg-indigo-100 text-indigo-400 cursor-wait' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-600/20'
-              }`}
-            >
-              {isAnalyzing ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  正在深度扫描细节...
-                </>
-              ) : (
-                <>
-                  <Sparkles size={18} />
-                  AI 智能像素对齐评测
-                </>
-              )}
-            </button>
-            {isAnalyzing && (
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-[10px] font-black text-indigo-600 uppercase tracking-widest">
-                  <span>分析进度</span>
-                  <span>{aiProgress}%</span>
-                </div>
-                <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                  <div className="bg-indigo-600 h-full transition-all duration-500 ease-out" style={{ width: `${aiProgress}%` }}></div>
-                </div>
-              </div>
+        <div className="space-y-3">
+          <button
+            onClick={onAnalyze}
+            disabled={isAnalyzing}
+            className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold transition-all ${
+              isAnalyzing ? 'bg-indigo-100 text-indigo-400 cursor-wait' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-600/20'
+            }`}
+          >
+            {isAnalyzing ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                正在深度扫描细节...
+              </>
+            ) : (
+              <>
+                <Sparkles size={18} />
+                AI 智能像素对齐评测
+              </>
             )}
-          </div>
-        )}
+          </button>
+          {isAnalyzing && (
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[10px] font-black text-indigo-600 uppercase tracking-widest">
+                <span>分析进度</span>
+                <span>{aiProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                <div className="bg-indigo-600 h-full transition-all duration-500 ease-out" style={{ width: `${aiProgress}%` }}></div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
+      <div 
+        id="issue-list-scroll-area" 
+        className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50"
+      >
         {filteredIssues.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-center">
             <MessageSquareWarning size={40} className="mb-4 opacity-20" />
@@ -197,7 +199,6 @@ const IssueList: React.FC<IssueListProps> = ({
             return (
               <div
                 key={issue.id}
-                // Fix: Ensure the ref callback does not return a value, which would be interpreted as a cleanup function.
                 ref={(el) => {
                   if (el) {
                     itemRefs.current.set(issue.id, el);
@@ -232,14 +233,12 @@ const IssueList: React.FC<IssueListProps> = ({
                        </span>
                     )}
                   </div>
-                  {!isDevMode && (
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); onDeleteIssue(issue.id); }}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onDeleteIssue(issue.id); }}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
 
                 {isActive ? (
@@ -247,6 +246,7 @@ const IssueList: React.FC<IssueListProps> = ({
                     <input 
                       className="w-full text-sm font-black text-gray-900 border-none p-0 focus:ring-0 placeholder:text-gray-300"
                       value={issue.title}
+                      onFocus={() => { if (issue.title === '手动标注') onUpdateIssue(issue.id, { title: '' }); }}
                       onChange={e => onUpdateIssue(issue.id, { title: e.target.value })}
                       placeholder="问题标题"
                     />

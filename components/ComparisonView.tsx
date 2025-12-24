@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ComparisonMode, Annotation, ToolMode, DevImage } from '../types';
-import { ZoomIn, ZoomOut, RotateCcw, MoveHorizontal, MousePointer2, Paintbrush, Code2 } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, MoveHorizontal, MousePointer2, Paintbrush, Code2, Plus } from 'lucide-react';
 
 interface ComparisonViewProps {
   designImage: string;
@@ -35,6 +35,8 @@ const ComparisonView: React.FC<ComparisonViewProps> = ({
   designImage,
   devImages,
   activeDevImageId,
+  onSwitchDevImage,
+  onAddDevImage,
   mode,
   activeTool,
   annotations,
@@ -79,6 +81,8 @@ const ComparisonView: React.FC<ComparisonViewProps> = ({
       initialY: number;
       initialW?: number;
       initialH?: number;
+      initialEndX?: number;
+      initialEndY?: number;
   } | null>(null);
   
   const outerContainerRef = useRef<HTMLDivElement>(null);
@@ -117,10 +121,18 @@ const ComparisonView: React.FC<ComparisonViewProps> = ({
         const deltaYPercent = ((e.clientY - dragState.startY) / rect.height) * 100;
 
         if (dragState.action === 'move') {
-            onUpdateAnnotation(dragState.id, {
+            const updates: Partial<Annotation> = {
                 x: dragState.initialX + deltaXPercent,
                 y: dragState.initialY + deltaYPercent
-            });
+            };
+            
+            // Move end coordinates for measurements
+            if (dragState.initialEndX !== undefined && dragState.initialEndY !== undefined) {
+                updates.endX = dragState.initialEndX + deltaXPercent;
+                updates.endY = dragState.initialEndY + deltaYPercent;
+            }
+
+            onUpdateAnnotation(dragState.id, updates);
         } else if (dragState.action === 'resize' && dragState.initialW !== undefined && dragState.initialH !== undefined) {
              onUpdateAnnotation(dragState.id, {
                 width: Math.max(0.5, dragState.initialW + deltaXPercent),
@@ -209,8 +221,8 @@ const ComparisonView: React.FC<ComparisonViewProps> = ({
 
   // --- Annotation Manipulation Handlers ---
   const handleAnnotationMouseDown = (e: React.MouseEvent, ann: Annotation) => {
-      // Allow drag for manual boxes and AI boxes
-      if ((ann.type === 'manual' || ann.type === 'ai') && activeTool === ToolMode.POINTER) {
+      // Allow drag for ANY annotation type if Pointer tool is active
+      if (activeTool === ToolMode.POINTER) {
           e.stopPropagation();
           onSelectAnnotation(ann.id); // Ensure click also selects
           
@@ -222,7 +234,11 @@ const ComparisonView: React.FC<ComparisonViewProps> = ({
               startX: e.clientX,
               startY: e.clientY,
               initialX: ann.x,
-              initialY: ann.y
+              initialY: ann.y,
+              initialEndX: ann.endX,
+              initialEndY: ann.endY,
+              initialW: ann.width,
+              initialH: ann.height
           });
       }
   };
@@ -378,7 +394,7 @@ const ComparisonView: React.FC<ComparisonViewProps> = ({
     if (!showAnnotations) return null;
     return (
       <>
-        {annotations.map((ann) => {
+        {annotations.filter(ann => ann.devImageId === activeDevImageId).map((ann) => {
           const isActive = activeAnnotationId === ann.id;
           const isHovered = hoveredAnnotationId === ann.id;
           
@@ -416,12 +432,20 @@ const ComparisonView: React.FC<ComparisonViewProps> = ({
           if (ann.type === 'measure' && ann.endX !== undefined) {
             const dx = ann.endX - ann.x;
             const dy = ann.endY! - ann.y;
-            const lenPct = Math.sqrt(dx * dx + dy * dy);
-            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
             
-            // Calculate real pixels if natural size known
+            let lenPct = Math.sqrt(dx * dx + dy * dy);
+            let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            
             let label = `${Math.round(lenPct * 10) / 10}%`;
+
+            // Fix for aspect ratio (render vs physical pixels)
             if (naturalSize) {
+                const ratio = naturalSize.h / naturalSize.w;
+                // Convert dy (which is % of Height) to % of Width units
+                const dyScaled = dy * ratio; 
+                lenPct = Math.sqrt(dx * dx + dyScaled * dyScaled);
+                angle = Math.atan2(dyScaled, dx) * 180 / Math.PI;
+
                 const pxDist = Math.sqrt(
                     Math.pow((ann.endX - ann.x) / 100 * naturalSize.w, 2) + 
                     Math.pow((ann.endY! - ann.y) / 100 * naturalSize.h, 2)
@@ -430,8 +454,13 @@ const ComparisonView: React.FC<ComparisonViewProps> = ({
             }
             
             return (
-              <div key={ann.id} className={`absolute origin-left flex items-center justify-center transition-all ${zIndexClass} ${isPointerMode ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${isActive || isHovered ? 'bg-indigo-600' : 'bg-red-500'}`} style={{ left: `${ann.x}%`, top: `${ann.y}%`, width: `${lenPct}%`, height: '2px', transform: `rotate(${angle}deg)` }} onMouseDown={(e) => { e.stopPropagation(); onSelectAnnotation(ann.id); }}>
-                <div className="bg-white px-2 py-0.5 rounded-full border text-[20px] font-bold shadow-sm whitespace-nowrap" style={{ transform: `rotate(${-angle}deg)` }}>
+              <div 
+                key={ann.id} 
+                className={`absolute origin-left flex items-center justify-center transition-all ${zIndexClass} ${isPointerMode ? 'pointer-events-auto cursor-move' : 'pointer-events-none'} ${isActive || isHovered ? 'bg-indigo-600' : 'bg-red-500'}`} 
+                style={{ left: `${ann.x}%`, top: `${ann.y}%`, width: `${lenPct}%`, height: '2px', transform: `rotate(${angle}deg)` }} 
+                onMouseDown={(e) => isPointerMode && handleAnnotationMouseDown(e, ann)}
+              >
+                <div className="bg-white px-2 py-0.5 rounded-full border text-[20px] font-bold shadow-sm whitespace-nowrap select-none" style={{ transform: `rotate(${-angle}deg)` }}>
                     {label}
                 </div>
               </div>
@@ -441,16 +470,26 @@ const ComparisonView: React.FC<ComparisonViewProps> = ({
           // Colors
           if (ann.type === 'color' && ann.color) {
             return (
-              <div key={ann.id} className={`absolute flex items-center gap-2 px-2 py-1 bg-white border-2 rounded-lg shadow-xl transition-all ${zIndexClass} ${isPointerMode ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${isActive || isHovered ? 'border-indigo-600 scale-110' : 'border-slate-100'}`} style={{ left: `${ann.x}%`, top: `${ann.y}%`, transform: 'translate(-50%, -50%)' }} onMouseDown={(e) => { e.stopPropagation(); onSelectAnnotation(ann.id); }}>
+              <div 
+                key={ann.id} 
+                className={`absolute flex items-center gap-2 px-2 py-1 bg-white border-2 rounded-lg shadow-xl transition-all ${zIndexClass} ${isPointerMode ? 'pointer-events-auto cursor-move' : 'pointer-events-none'} ${isActive || isHovered ? 'border-indigo-600 scale-110' : 'border-slate-100'}`} 
+                style={{ left: `${ann.x}%`, top: `${ann.y}%`, transform: 'translate(-50%, -50%)' }} 
+                onMouseDown={(e) => isPointerMode && handleAnnotationMouseDown(e, ann)}
+              >
                 <div className="w-5 h-5 rounded-full border border-gray-200" style={{ backgroundColor: ann.color }} />
-                <span className="text-[20px] font-bold font-mono text-slate-800">{ann.color}</span>
+                <span className="text-[20px] font-bold font-mono text-slate-800 select-none">{ann.color}</span>
               </div>
             );
           }
 
           // Manual Pins
           return (
-            <div key={ann.id} className={`absolute w-6 h-6 -ml-3 -mt-3 rounded-full border-2 flex items-center justify-center text-[10px] font-black transition-all shadow-md ${zIndexClass} ${isPointerMode ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'} ${isActive || isHovered ? 'bg-indigo-600 text-white border-white scale-125' : 'bg-white text-blue-600 border-blue-600'}`} style={{ left: `${ann.x}%`, top: `${ann.y}%` }} onMouseDown={(e) => { e.stopPropagation(); onSelectAnnotation(ann.id); }}>
+            <div 
+                key={ann.id} 
+                className={`absolute w-6 h-6 -ml-3 -mt-3 rounded-full border-2 flex items-center justify-center text-[10px] font-black transition-all shadow-md ${zIndexClass} ${isPointerMode ? 'pointer-events-auto cursor-move' : 'pointer-events-none'} ${isActive || isHovered ? 'bg-indigo-600 text-white border-white scale-125' : 'bg-white text-blue-600 border-blue-600'}`} 
+                style={{ left: `${ann.x}%`, top: `${ann.y}%` }} 
+                onMouseDown={(e) => isPointerMode && handleAnnotationMouseDown(e, ann)}
+            >
                 {ann.type === 'manual' ? '+' : '!'}
             </div>
           );
@@ -609,6 +648,33 @@ const ComparisonView: React.FC<ComparisonViewProps> = ({
             </div>
         )}
 
+        {/* Filmstrip: Dev Image Switcher */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white/90 backdrop-blur shadow-xl border border-gray-200 p-1.5 rounded-2xl flex items-center gap-2 transition-all">
+            {devImages.map((img) => (
+                <button
+                    key={img.id}
+                    onClick={() => onSwitchDevImage(img.id)}
+                    className={`relative w-10 h-10 rounded-lg overflow-hidden border-2 transition-all ${
+                        img.id === activeDevImageId 
+                            ? 'border-indigo-600 ring-2 ring-indigo-200 ring-offset-1 scale-105' 
+                            : 'border-gray-100 opacity-60 hover:opacity-100 grayscale hover:grayscale-0'
+                    }`}
+                    title={img.name}
+                >
+                    <img src={img.data} className="w-full h-full object-cover" />
+                </button>
+            ))}
+            <div className="w-[1px] h-6 bg-gray-200 mx-1"></div>
+            <button
+                onClick={onAddDevImage}
+                className="w-10 h-10 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 transition-all"
+                title="添加实现图"
+            >
+                <Plus size={18} />
+            </button>
+        </div>
+
+        {/* Zoom Controls */}
         <div className="absolute bottom-6 right-6 z-40 bg-white shadow-xl border p-1 rounded-xl flex items-center gap-1">
              <button onClick={onZoomOut} className="p-2 hover:bg-slate-100 rounded-lg"><ZoomOut size={16}/></button>
              <span className="text-xs font-black w-10 text-center">{Math.round(scale * 100)}%</span>
